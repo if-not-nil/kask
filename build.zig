@@ -72,6 +72,7 @@ pub fn build(b: *std.Build) void {
         .name = "zig_tetris",
         .root_module = exe_mod,
     });
+
     exe.linkLibrary(raylib_artifact);
     exe.root_module.addImport("raylib", raylib);
     exe.root_module.addImport("raygui", raygui);
