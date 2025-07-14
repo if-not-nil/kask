@@ -9,3 +9,7 @@ pub fn pos_to_tile(pos: f32) f32 {
 pub fn F32(T: anytype) f32 {
     return @floatFromInt(T);
 }
+
+pub fn I32(T: anytype) i32 {
+    return @intFromFloat(T);
+}

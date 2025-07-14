@@ -1,108 +1,73 @@
-const rl = @import("raylib");
-const G = @import("globals.zig");
-const fastnoise = @import("./fastnoise.zig");
 const std = @import("std");
 
+const rl = @import("raylib");
+
+const Chunk = @import("./Chunk.zig");
+const Tile = @import("./Tile.zig");
+const G = @import("globals.zig");
+
+const CHUNK_NUM = 16;
+
 pub const Map = @This();
-chunks: [16][16]Chunk,
-gen: fastnoise.Noise(f32),
+chunks: [CHUNK_NUM][CHUNK_NUM]Chunk,
 
-pub fn init() Map {
-    var map = Map{
+pub fn init(allocator: std.mem.Allocator) !*Map {
+    var map_ptr = try allocator.create(Map);
+
+    map_ptr.* = Map{
         .chunks = undefined,
-        .gen = fastnoise.Noise(f32){
-            .seed = 1337,
-            .noise_type = .simplex,
-            .frequency = 0.05,
-        },
     };
-    for (0..16) |x| {
-        for (0..16) |y| {
-            var chunk = Chunk.init(x, y);
-            chunk.generate(&map.gen);
-            map.chunks[x][y] = chunk;
+
+    for (0..CHUNK_NUM) |x| {
+        map_ptr.chunks[x][0] = Chunk.init(x, 0);
+        map_ptr.chunks[x][0].generate_dirt();
+    }
+    for (0..CHUNK_NUM) |x| {
+        for (1..CHUNK_NUM) |y| {
+            map_ptr.chunks[x][y] = Chunk.init(x, y);
+            map_ptr.chunks[x][y].generate_stone();
         }
     }
 
-    return map;
+    return map_ptr;
 }
-pub const Tile = struct {
-    const BlockType = enum { none, stone };
-    block: Tile.BlockType,
-    pub fn draw(self: *const Tile, x: anytype, y: anytype) void {
-        _ = self;
-        rl.drawRectangle(@intCast(x), @intCast(y), G.BSIZE, G.BSIZE, .white);
-    }
-};
-
-pub const Chunk = struct {
-    x: usize,
-    y: usize,
-    tiles: [256][256]Tile,
-    pub fn init(chunk_x: usize, chunk_y: usize) Chunk {
-        var tiles: [256][256]Tile = undefined;
-        for (0..256) |x| {
-            for (0..256) |y| {
-                tiles[x][y] = Tile{ .block = .none };
-            }
-        }
-        const chunk = Chunk{ .x = chunk_x, .y = chunk_y, .tiles = tiles };
-        return chunk;
-    }
-    pub fn generate(self: *Chunk, gen: *fastnoise.Noise(f32)) void {
-        for (0..256) |x| {
-            for (0..256) |y| {
-                const n = gen.genNoise2D(@floatFromInt(x), @floatFromInt(y));
-                // std.debug.print("n: {}\n", .{n});
-                if (n > 0) {
-                    self.tiles[x][y] = Tile{ .block = .stone };
-                } else {
-                    self.tiles[x][y] = Tile{ .block = .none };
-                }
-            }
-        }
-    }
-};
 
 pub fn get_tile(self: *Map, x: usize, y: usize) Tile {
-    const chunk_x: usize = @intFromFloat(256 / @as(f32, @floatFromInt(x)));
-    const chunk_y: usize = @intFromFloat(256 / @as(f32, @floatFromInt(y)));
+    const chunk_x = x / 256;
+    const chunk_y = y / 256;
 
-    const local_x = x - (chunk_x * 256);
-    const local_y = y - (chunk_y * 256);
+    const local_x = x % 256;
+    const local_y = y % 256;
+
+    if (chunk_x >= CHUNK_NUM or chunk_y >= CHUNK_NUM) {
+        return Tile{ .block = .none };
+    }
+
     return self.chunks[chunk_x][chunk_y].tiles[local_x][local_y];
 }
 
-pub fn draw(self: *Map, area: rl.Rectangle) void {
-    const x_start = @as(usize, @intFromFloat(area.x));
-    const y_start = @as(usize, @intFromFloat(area.y));
-    const x_end = x_start + @as(usize, @intFromFloat(area.width));
-    const y_end = y_start + @as(usize, @intFromFloat(area.height));
+pub fn check_collisions(self: *Map, x: f32, y: f32) Tile.CollisionType {
+    const t_x: usize = @intFromFloat(x / G.BSIZE);
+    const t_y: usize = @intFromFloat(y / G.BSIZE);
+    const t = self.get_tile(t_x, t_y);
+    std.debug.print("{}, {}, {}\n", .{ x, y, t });
+    std.debug.print("{}, {}, {}\n", .{ t_x, t_y, t });
+    return t.collision_type();
+}
 
-    for (x_start..@min(x_end, self.chunks.len * 256)) |x| {
-        for (y_start..@min(y_end, self.chunks.len * 256)) |y| {
+pub fn draw(self: *Map, area: rl.Rectangle) void {
+    const x_start_tile = @as(usize, @intFromFloat(area.x));
+    const y_start_tile = @as(usize, @intFromFloat(area.y));
+
+    const x_end_tile = x_start_tile + @as(usize, @intFromFloat(area.width)) + G.BSIZE;
+    const y_end_tile = y_start_tile + @as(usize, @intFromFloat(area.height)) + G.BSIZE;
+    // std.debug.print("{}\n", .{area});
+    // std.debug.print("{}, {}, {}, {}\n", .{ x_start_tile, y_start_tile, x_end_tile, y_end_tile });
+
+    for (x_start_tile..@min(x_end_tile, 256 * CHUNK_NUM)) |x| {
+        for (y_start_tile..@min(y_end_tile, 256 * CHUNK_NUM)) |y| {
             const tile = self.get_tile(x, y);
             tile.draw(x, y);
         }
     }
 }
-// x/y params are for the box of drawn tiles
-// pub fn draw(self: *Map, area: rl.Rectangle) void {
-//     const x_start = @as(usize, @intFromFloat(area.x));
-//     const y_start = @as(usize, @intFromFloat(area.y));
-//     const x_end = x_start + @as(usize, @intFromFloat(area.width));
-//     const y_end = y_start + @as(usize, @intFromFloat(area.height));
-//
-//     for (x_start..@min(x_end, self.data.len)) |x| {
-//         for (y_start..@min(y_end, self.data.len)) |y| {
-//             const color: u8 = @intCast(self.data[x][y]);
-//             rl.drawRectangle(
-//                 @as(i32, @intCast(x)) * G.BSIZE,
-//                 @as(i32, @intCast(y)) * G.BSIZE,
-//                 G.BSIZE,
-//                 G.BSIZE,
-//                 rl.Color.init(color * 255, color * 255, color * 255, 255),
-//             );
-//         }
-//     }
-// }
