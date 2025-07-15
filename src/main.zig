@@ -15,27 +15,29 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    var map_ptr = try Map.init(allocator);
-    std.debug.print("{}\n", .{map_ptr.get_tile(0, 20)});
-    defer allocator.destroy(map_ptr);
+    var map = try Map.init(allocator);
+    // std.debug.print("{}\n", .{map_ptr.get_tile(0, 20)});
+    defer map.deinit();
 
-    var player = Player.init(map_ptr);
+    var player = Player.init(&map);
 
     defer rl.closeWindow();
     rl.setTargetFPS(60);
     while (!rl.windowShouldClose()) {
-        player.update();
+        try player.update();
         rl.beginDrawing();
         {
             rl.clearBackground(.black);
             player.camera.begin();
             {
-                map_ptr.draw(player.draw_rect);
+                try map.draw(player.draw_pos);
                 player.draw();
             }
             player.camera.end();
         }
         rl.drawFPS(20, 20);
+        rl.drawText(rl.textFormat("%08f, %08f", .{ @floor(player.camera.target.x), @floor(player.camera.target.y) }), 20, 40, 20, .green);
+        rl.drawText(rl.textFormat("%08f, %08f", .{ @floor(player.x), @floor(player.y) }), 20, 60, 20, .green);
         rl.endDrawing();
     }
 }

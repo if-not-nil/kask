@@ -9,8 +9,6 @@ const root = @import("root.zig");
 const G = @import("./globals.zig");
 
 pub fn main() !void {
-    std.debug.print("App started\n", .{});
-
     rl.initWindow(G.ScreenWidth, G.ScreenHeight, "chunks");
 
     var world = World.init();

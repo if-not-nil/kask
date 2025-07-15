@@ -1,8 +1,10 @@
 const rl = @import("raylib");
 const std = @import("std");
+const G = @import("globals.zig");
 
 const fastnoise = @import("./fastnoise.zig");
 const Tile = @import("./Tile.zig");
+const Vec2i = struct { x: i32, y: i32 };
 
 pub const Chunk = @This();
 
@@ -15,6 +17,12 @@ pub fn init(chunk_x: usize, chunk_y: usize) Chunk {
     return self;
 }
 
+pub fn set_tile(self: *Chunk, x: anytype, y: anytype, block: Tile) void {
+    const rx: usize = @intCast(x);
+    const ry: usize = @intCast(y);
+    self.tiles[rx][ry] = block;
+}
+
 pub fn generate_dirt(self: *Chunk) void {
     const gen = fastnoise.Noise(f32){
         .seed = 1337,
@@ -23,6 +31,11 @@ pub fn generate_dirt(self: *Chunk) void {
         .domain_warp_amp = 3,
         .frequency = 0.05,
     };
+
+    var bleed_buf: [G.CHUNK_SIZE]Vec2i = undefined;
+    var bleed_buf_count: usize = 0;
+    inline for (0..G.CHUNK_SIZE) |i|
+        bleed_buf[i] = Vec2i{ .x = 0, .y = 0 };
 
     for (0..256) |x| {
         const xf = @as(f32, @floatFromInt(x + (self.x * 256)));
@@ -46,10 +59,18 @@ pub fn generate_dirt(self: *Chunk) void {
             const clamped_bottom = @min(height_bottom, 255);
             const clamped_top = @min(height_top, 255);
             for (0..160 - h_mod + clamped_top) |y| {
-                self.tiles[x][y].block = .dirt;
+                self.tiles[x][y] = Tile.Dirt;
             }
             for (220 - h_mod - clamped_bottom..256) |y| {
-                self.tiles[x][y].block = .dirt;
+                self.tiles[x][y] = Tile.Dirt;
+            }
+
+            if (clamped_bottom < 9) {
+                bleed_buf[bleed_buf_count] = .{
+                    .x = @intCast(x),
+                    .y = @intCast(220 - h_mod - clamped_bottom),
+                };
+                bleed_buf_count += 1;
             }
         }
         // part 1.2: caves, 2d
@@ -60,21 +81,30 @@ pub fn generate_dirt(self: *Chunk) void {
             const yf = @as(f32, @floatFromInt(y + (self.y * 256)));
             const n = gen.genNoise2D(xf, yf);
             if (n > 0.7) {
-                self.tiles[x][y].block = .none;
+                self.tiles[x][y] = Tile.None;
             }
         }
     }
-    // part II: make the edges pop
-    for (1..255) |x| {
-        for (1..255) |y| { // checkingthe edge blocks would mean asking the map for the neighbouring chunk
-            if (self.tiles[x][y].block == .dirt) {
-                const empty_above = self.tiles[x][y - 1].block == .none;
-                const empty_below = self.tiles[x][y + 1].block == .none;
-                const empty_left = self.tiles[x - 1][y].block == .none;
-                const empty_right = self.tiles[x + 1][y].block == .none;
-                if (empty_above or empty_below or empty_right or empty_left) {
-                    self.tiles[x][y].block = .dirt;
-                }
+    // part II: stonebleeds
+    for (bleed_buf[0..bleed_buf_count]) |pos| {
+        const xf = G.F32(pos.x + @as(i32, @intCast(self.x * 256)));
+        const yf = G.F32(pos.y + @as(i32, @intCast(self.y * 256)));
+
+        var n = gen.genNoise2D(xf, yf);
+        const base = n - 0.5;
+
+        var i: i32 = 0;
+        const max_depth: i32 = 64;
+
+        while (i < max_depth) : (i += 1) {
+            const sample_yf = yf + G.F32(i);
+            n = gen.genNoise2D(xf, sample_yf);
+            if (n < base) break;
+
+            const world_x = pos.x + G.I32(n);
+            const world_y = pos.y + i;
+            if (world_y >= 0 and world_y < 256) { // clamp to tile bounds
+                self.set_tile(world_x, world_y, Tile.Stone);
             }
         }
     }
@@ -96,14 +126,14 @@ pub fn generate_stone(self: *Chunk) void {
                 if (lc_y > 0) {
                     const above = gen.genNoise2D(@floatFromInt(x + self.x), @floatFromInt(y + self.y - 1));
                     if (above < 0) {
-                        self.tiles[x][y].block = .dirt;
+                        self.tiles[x][y] = Tile.Dirt;
                         continue;
                     }
                 }
-                self.tiles[x][y].block = .stone;
+                self.tiles[x][y] = Tile.Stone;
                 continue;
             }
-            self.tiles[x][y].block = .none;
+            self.tiles[x][y] = Tile.None;
         }
     }
 }
