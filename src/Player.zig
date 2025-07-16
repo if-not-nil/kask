@@ -123,10 +123,14 @@ pub fn update(self: *Player) !void {
         }
     }
 
-    const NOCLIP = false;
-    if (comptime NOCLIP) {
+    if (comptime G.NOCLIP) {
         self.camera.target.x += G.input_vector_1d(.a, .d) * 50;
         self.camera.target.y += G.input_vector_1d(.w, .s) * 50;
+        if (rl.isKeyDown(.minus))
+            self.camera.zoom -= 0.01;
+
+        if (rl.isKeyDown(.equal))
+            self.camera.zoom += 0.01;
     } else {
         const delta_time = rl.getFrameTime();
         self.apply_horizontal_movement(delta_time);

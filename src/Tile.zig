@@ -20,6 +20,7 @@ wall: Tile.WallType = .none,
 // only blocks should have that
 reactive: bool = true,
 react: ?*const fn (self: *Tile) void = null,
+light_emit: ?u4 = 0,
 
 pub fn collision_type(self: *const Tile) CollisionType {
     return switch (self.block) {
@@ -28,14 +29,37 @@ pub fn collision_type(self: *const Tile) CollisionType {
     };
 }
 
-pub fn draw(self: *const Tile, x: anytype, y: anytype) void {
+pub fn draw(self: *const Tile, x: anytype, y: anytype, light: u4) void {
     const color: rl.Color = switch (self.block) {
         .stone => .gray,
         .dirt => .brown,
         .lava => .red,
-        else => .black,
+        .none => {
+            rl.drawRectangle(
+                @intCast(x * G.BSIZE),
+                @intCast(y * G.BSIZE),
+                G.BSIZE,
+                G.BSIZE,
+                rl.Color{
+                    .a = 255,
+                    .r = @as(u8, @intCast(light)) * 2,
+                    .g = @as(u8, @intCast(light)) * 2,
+                    .b = @as(u8, @intCast(light)) * 2,
+                },
+            );
+            return;
+        },
     };
-    rl.drawRectangle(@intCast(x * G.BSIZE), @intCast(y * G.BSIZE), G.BSIZE, G.BSIZE, color);
+    const brightness = 0.2 + 0.8 * (G.F32(light) / 16.0); // 0.2 is the lowest
+
+    const lit = rl.Color{
+        .r = @intFromFloat(G.F32(color.r) * brightness),
+        .g = @intFromFloat(G.F32(color.g) * brightness),
+        .b = @intFromFloat(G.F32(color.b) * brightness),
+        .a = color.a,
+    };
+
+    rl.drawRectangle(@intCast(x * G.BSIZE), @intCast(y * G.BSIZE), G.BSIZE, G.BSIZE, lit);
 }
 
 const react_fns = struct {
@@ -61,4 +85,5 @@ pub const Stone = Tile{
     .block = .stone,
     .reactive = false,
     .wall = .none,
+    .light_emit = 15,
 };

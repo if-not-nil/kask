@@ -23,6 +23,26 @@ pub fn set_tile(self: *Chunk, x: anytype, y: anytype, block: Tile) void {
     self.tiles[rx][ry] = block;
 }
 
+pub fn generate_surface(self: *Chunk) void {
+    const gen = fastnoise.Noise(f32){
+        .seed = 1337,
+        .noise_type = .simplex,
+        .domain_warp_type = .simplex_reduced,
+        .domain_warp_amp = 5,
+        .frequency = 0.05,
+    };
+    for (0..G.CHUNK_SIZE) |x| {
+        const xf = @as(f32, @floatFromInt(x + (self.x * 256)));
+        const n = gen.genNoise2D(xf, 0);
+        const height: usize = @intFromFloat( // scale to [7, 15]
+            @floor((n + 1.0) * 0.5 * 14.0 + 7.0));
+        const clamped = @min(height, 255);
+        for (255 - clamped..256) |y| { // i guess its one block higher for no reason
+            self.set_tile(x, y, Tile.Dirt);
+        }
+    }
+}
+
 pub fn generate_dirt(self: *Chunk) void {
     const gen = fastnoise.Noise(f32){
         .seed = 1337,

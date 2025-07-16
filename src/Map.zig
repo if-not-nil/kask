@@ -8,15 +8,19 @@ const G = @import("globals.zig");
 
 pub const Map = @This();
 
-const LightTuple = struct { G.Vec2i, u8 };
+// const LightTuple = struct { G.Vec2i, u8 };
 
 allocator: std.mem.Allocator,
 chunks: *[G.CHUNK_NUM][G.CHUNK_NUM]Chunk,
-lightmap: *std.ArrayList(LightTuple),
+// lightmap: std.AutoHashMap(G.Vec2i, u8),
 
 pub fn init(allocator: std.mem.Allocator) !Map {
     var chunks = try allocator.create([G.CHUNK_NUM][G.CHUNK_NUM]Chunk);
 
+    // for (0..G.CHUNK_NUM) |x| {
+    //     chunks[x][0] = Chunk.init(x, 0);
+    //     chunks[x][0].generate_surface();
+    // }
     for (0..G.CHUNK_NUM) |x| {
         chunks[x][0] = Chunk.init(x, 0);
         chunks[x][0].generate_dirt();
@@ -28,18 +32,25 @@ pub fn init(allocator: std.mem.Allocator) !Map {
         }
     }
 
-    var lightmap = std.ArrayList(LightTuple).init(allocator);
+    // var lightmap = std.AutoHashMap(G.Vec2i, u8).init(allocator);
+    // try lightmap.put(G.Vec2i{ .x = 600, .y = 2840 }, 16);
 
     return Map{
         .chunks = chunks,
         .allocator = allocator,
-        .lightmap = &lightmap,
+        // .lightmap = lightmap,
     };
 }
 
 pub fn deinit(self: *Map) void {
     self.allocator.destroy(self.chunks);
-    self.lightmap.deinit();
+    // {
+    //     var it = self.lightmap.iterator();
+    //     while (it.next()) |kv| {
+    //         std.debug.print("kvv {}\n", .{kv});
+    //     }
+    // }
+    // self.lightmap.deinit();
 }
 
 pub fn get_tile(self: *Map, x: usize, y: usize) !*Tile {
@@ -83,20 +94,78 @@ pub fn check_collisions(self: *Map, x: f32, y: f32) Tile.CollisionType {
     return t.collision_type();
 }
 
+// fn calculate_lightmap(x_start: usize, x_end: usize, y_start: usize, y_end: usize) [][]u8 {
+//     const size_x = x_end - x_start;
+//     const size_y = y_end - y_start;
+//     const map = [size_x][size_y]u8;
+//     for (0..size_x) |x| {
+//         for (0..size_y) |y| {
+//             map[x][y] = 0;
+//         }
+//     }
+//     return map;
+// }
+
+const draw_w = @divTrunc(G.ScreenWidth, G.BSIZE) + 1;
+const draw_h = @divTrunc(G.ScreenHeight, G.BSIZE) + 1;
+
 pub fn draw(self: *Map, pos: rl.Vector2) !void {
     const x_u: usize = @intFromFloat(pos.x);
     const y_u: usize = @intFromFloat(pos.y);
 
-    const x_start_tile = x_u / G.BSIZE;
-    const y_start_tile = y_u / G.BSIZE;
+    const x_start = x_u / G.BSIZE;
+    const y_start = y_u / G.BSIZE;
 
-    const x_end_tile = (x_start_tile + @divTrunc(G.USIZE(rl.getScreenWidth()), G.BSIZE) + 1);
-    const y_end_tile = (y_start_tile + @divTrunc(G.USIZE(rl.getScreenHeight()), G.BSIZE) + 1);
+    var lightmap = try self.allocator.alloc(u4, draw_w * draw_h);
+    @memset(lightmap, 0);
+    var queue = std.ArrayList(G.Vec3i).init(self.allocator);
+    defer queue.deinit();
+    defer self.allocator.free(lightmap);
 
-    for (x_start_tile..@min(x_end_tile, G.CHUNK_SIZE * G.CHUNK_NUM)) |x| {
-        for (y_start_tile..@min(y_end_tile, G.CHUNK_SIZE * G.CHUNK_NUM)) |y| {
+    for (x_start..@min(x_start + draw_w, G.CHUNK_SIZE * G.CHUNK_NUM)) |x| {
+        for (y_start..@min(y_start + draw_h, G.CHUNK_SIZE * G.CHUNK_NUM)) |y| {
+            const tile = try self.get_tile(x, y);
+            if (tile.light_emit) |emit| {
+                const lx = x - x_start;
+                const ly = y - y_start;
+                const idx = ly * draw_w + lx;
+                lightmap[idx] = emit;
+                try queue.append(.{ .x = @intCast(x), .y = @intCast(y), .z = emit });
+            }
+        }
+    }
+
+    while (queue.pop()) |node| {
+        const dirs = [_][2]i32{ .{ 1, 0 }, .{ -1, 0 }, .{ 0, 1 }, .{ 0, -1 } };
+        for (dirs) |d| {
+            const nx = node.x + d[0];
+            const ny = node.y + d[1];
+
+            const lx = nx - @as(i32, @intCast(x_start));
+            const ly = ny - @as(i32, @intCast(y_start));
+
+            if (lx < 0 or ly < 0) continue;
+            if (lx >= draw_w or ly >= draw_h) continue;
+
+            const i: usize = @intCast(ly * draw_w + lx);
+            if (node.z == 0) continue;
+            const next_level = node.z - 1;
+
+            if (lightmap[i] >= next_level) continue;
+
+            lightmap[i] = @intCast(next_level);
+            try queue.append(.{ .x = nx, .y = ny, .z = next_level });
+        }
+    }
+
+    for (x_start..@min(x_start + draw_w, G.CHUNK_SIZE * G.CHUNK_NUM)) |x| {
+        for (y_start..@min(y_start + draw_h, G.CHUNK_SIZE * G.CHUNK_NUM)) |y| {
+            const lx = x - x_start;
+            const ly = y - y_start;
+            const idx = ly * draw_w + lx;
+
             var tile = try self.get_tile(x, y);
-            tile.draw(x, y);
+            tile.draw(x, y, lightmap[idx]);
         }
     }
 }

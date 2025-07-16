@@ -10,8 +10,17 @@ pub const Vec2i = struct {
     const zero = Vec2i{ .x = 0, .y = 0 };
 };
 
+pub const Vec3i = struct {
+    x: i32,
+    y: i32,
+    z: i32,
+    const zero = Vec2i{ .x = 0, .y = 0 };
+};
+
+pub const NOCLIP = true;
 pub const CHUNK_NUM = 16;
 pub const CHUNK_SIZE = 256;
+pub const WORLD_SIZE = CHUNK_NUM * CHUNK_SIZE;
 
 // there are two places where it would be calculating it 60 times per second if not for this
 pub var HalfScreenWidth = ScreenWidth / 2;

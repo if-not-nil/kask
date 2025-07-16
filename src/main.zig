@@ -11,7 +11,7 @@ pub fn main() !void {
     rl.initWindow(G.ScreenWidth, G.ScreenHeight, "chunks");
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    defer std.debug.print("allocator deinit check: {}\n", .{gpa.deinit()});
 
     const allocator = gpa.allocator();
 
