@@ -1,5 +1,6 @@
 const rl = @import("raylib");
 
+// TODO: make mutable
 pub const BSIZE = 16;
 pub const ScreenWidth = 1080;
 pub const ScreenHeight = 720;
@@ -9,13 +10,23 @@ pub const Vec2i = struct {
     y: i32,
     const zero = Vec2i{ .x = 0, .y = 0 };
 };
-
+pub const Vec2u = struct {
+    x: usize,
+    y: usize,
+};
 pub const Vec3i = struct {
     x: i32,
     y: i32,
     z: i32,
     const zero = Vec2i{ .x = 0, .y = 0 };
 };
+
+pub fn which_chunk(x: usize, y: usize) struct { x: usize, y: usize } {
+    return .{
+        .x = @divTrunc(x, CHUNK_SIZE),
+        .y = @divTrunc(y, CHUNK_SIZE),
+    };
+}
 
 pub const NOCLIP = true;
 pub const CHUNK_NUM = 16;

@@ -1,6 +1,7 @@
 const Map = @import("Map.zig");
 const Tile = @import("Tile.zig");
 const Collider = @This();
+const G = @import("./globals.zig");
 
 const rl = @import("raylib");
 
@@ -30,7 +31,7 @@ pub fn check_collisions(s: *Collider) void {
     const bottom_y = s.y;
     const top_y = s.y - s.h;
 
-    const step = 16.0;
+    const step = G.BSIZE;
 
     var left: Tile.CollisionType = .none;
     var right: Tile.CollisionType = .none;

@@ -6,6 +6,7 @@ const G = @import("globals.zig");
 const Collider = @import("./Collider.zig");
 const Vec2 = rl.Vector2;
 const Vec2i = struct { x: i32, y: i32 };
+const Tile = @import("./Tile.zig");
 
 const Cursor = struct {
     pos: Vec2 = .{ .x = 0, .y = 0 },
@@ -22,8 +23,8 @@ const Cursor = struct {
     fn input(self: *Cursor) ?input_res {
         // !TEMP
         const pos = Vec2i{
-            .x = G.I32(self.pos.x / 16),
-            .y = G.I32(self.pos.y / 16),
+            .x = G.I32(self.pos.x / G.BSIZE),
+            .y = G.I32(self.pos.y / G.BSIZE),
         };
         if (rl.isMouseButtonPressed(.left))
             return .{ .t = signals.BreakTile, .pos = pos };
@@ -33,10 +34,10 @@ const Cursor = struct {
         self.pos = rl.getScreenToWorld2D(rl.getMousePosition(), cam.*);
 
         rl.drawRectangle(
-            G.I32(self.pos.x / 16) * 16,
-            G.I32(self.pos.y / 16) * 16,
-            16,
-            16,
+            G.I32(self.pos.x / G.BSIZE) * G.BSIZE,
+            G.I32(self.pos.y / G.BSIZE) * G.BSIZE,
+            G.BSIZE,
+            G.BSIZE,
             rl.Color.init(255, 255, 255, 128),
         );
     }
@@ -117,7 +118,7 @@ pub fn update(self: *Player) !void {
             // std.debug.print("{}\n", .{res});
             switch (res.t) {
                 .BreakTile => {
-                    try self.map_ptr.break_block(res.pos.x, res.pos.y);
+                    try self.map_ptr.set_tile(res.pos.x, res.pos.y, Tile.Stone);
                 },
             }
         }
@@ -149,8 +150,8 @@ pub fn update(self: *Player) !void {
 }
 
 pub fn init(map_ptr: *Map) Player {
-    const spawn_x = 100;
-    const spawn_y = 1000;
+    const spawn_x = 1000;
+    const spawn_y = 4500;
     const p = Player{
         .map_ptr = map_ptr,
         .x = spawn_x,
