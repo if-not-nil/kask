@@ -33,7 +33,7 @@ pub fn init(allocator: std.mem.Allocator) !Map {
         .allocator = allocator,
     };
 
-    try generators.caves(
+    try generators.nether(
         &map,
         .{ .x = 0, .y = 0 },
         .{ .x = G.WORLD_SIZE, .y = G.CHUNK_SIZE },
@@ -42,6 +42,11 @@ pub fn init(allocator: std.mem.Allocator) !Map {
         &map,
         .{ .x = 0, .y = G.CHUNK_SIZE },
         .{ .x = G.CHUNK_SIZE * 2, .y = G.WORLD_SIZE },
+    );
+    try generators.caves(
+        &map,
+        .{ .x = G.CHUNK_SIZE * 2, .y = G.CHUNK_SIZE },
+        .{ .x = G.CHUNK_SIZE * 4, .y = G.CHUNK_SIZE * 3 },
     );
     return map;
 }
@@ -107,6 +112,13 @@ pub fn set_tile(self: *Map, x: anytype, y: anytype, tile: Tile) !void {
         .tiles[G.USIZE(local_x)][G.USIZE(local_y)] = tile;
 }
 
+pub fn set_tile_client(self: *Map, x: anytype, y: anytype, tile: Tile) !void {
+    try self.set_tile(x, y, tile);
+    const sx: usize = @intCast(x - 2);
+    const sy: usize = @intCast(y - 2);
+    try self.recalc_light(sx - 16, sy - 16, 33, 33);
+}
+
 pub fn check_collisions(self: *Map, x: f32, y: f32) Tile.CollisionType {
     const t_x: usize = @intFromFloat(x / G.BSIZE);
     const t_y: usize = @intFromFloat(y / G.BSIZE);
@@ -117,6 +129,14 @@ pub fn check_collisions(self: *Map, x: f32, y: f32) Tile.CollisionType {
     //     t.react();
 
     return t.collision_type();
+}
+
+pub fn reset_light(self: *Map, x_start: usize, y_start: usize, width: usize, height: usize) !void {
+    for (x_start..x_start + width) |x| {
+        for (y_start..y_start + height) |y| {
+            try self.set_light(x, y, 0);
+        }
+    }
 }
 
 pub fn recalc_light(self: *Map, x_start: usize, y_start: usize, width: usize, height: usize) !void {
@@ -168,9 +188,9 @@ pub fn draw(self: *Map, pos: rl.Vector2) !void {
     const x_start = x_u / G.BSIZE;
     const y_start = y_u / G.BSIZE;
 
+    const c = G.which_chunk(x_start, y_start);
     // TODO: make it not like this
     if (!self.initial_lighting_done) {
-        const c = G.which_chunk(x_start, y_start);
         if (!self.initial_light_chunks[c.x][c.y]) {
             try self.recalc_light(c.x * G.CHUNK_SIZE, c.y * G.CHUNK_SIZE, 256, 256);
             std.debug.print("did chunk {}\n", .{c});
@@ -203,4 +223,6 @@ pub fn draw(self: *Map, pos: rl.Vector2) !void {
             tile.t.draw(x, y, tile.l);
         }
     }
+    if (comptime G.DEBUG_LIGHTMAP)
+        self.chunks[c.x][c.y].DEBUG_lightmap();
 }

@@ -1,0 +1,3 @@
+- separate the logic into client and server and put them on two threads
+- fix the lighting (actually watch a video on that)
+- ticking stuff 

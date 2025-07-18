@@ -118,7 +118,7 @@ pub fn update(self: *Player) !void {
             // std.debug.print("{}\n", .{res});
             switch (res.t) {
                 .BreakTile => {
-                    try self.map_ptr.set_tile(res.pos.x, res.pos.y, Tile.Stone);
+                    try self.map_ptr.set_tile_client(res.pos.x, res.pos.y, Tile.None);
                 },
             }
         }
@@ -150,7 +150,7 @@ pub fn update(self: *Player) !void {
 }
 
 pub fn init(map_ptr: *Map) Player {
-    const spawn_x = 1000;
+    const spawn_x = 8500;
     const spawn_y = 4500;
     const p = Player{
         .map_ptr = map_ptr,

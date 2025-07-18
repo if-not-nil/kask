@@ -28,3 +28,17 @@ pub fn init(chunk_x: usize, chunk_y: usize) Chunk {
     };
     return self;
 }
+
+pub fn DEBUG_lightmap(self: *Chunk) void {
+    for (0..CS) |x| {
+        for (0..CS) |y| {
+            rl.drawText(
+                rl.textFormat("%d", .{@as(u8, self.lightmap[x][y])}),
+                @intCast((self.x * CS * G.BSIZE) + x * G.BSIZE),
+                @intCast((self.y * CS * G.BSIZE) + y * G.BSIZE),
+                16,
+                .red,
+            );
+        }
+    }
+}

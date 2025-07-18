@@ -28,6 +28,11 @@ pub fn surface(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
     }
 }
 
+// worms area
+// - no ores
+// - OMOB, OMECH: unique worms spawn which drop loot
+// - OMOB: the higher the better the loot is
+//
 pub fn worms(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
     const gen = fastnoise.Noise(f32){
         .seed = 1337,
@@ -40,7 +45,7 @@ pub fn worms(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
     for (from.x..to.x) |x| {
         for (from.y..to.y) |y| {
             const n = gen.genNoise2D(@floatFromInt(x), @floatFromInt(y));
-            if (n > 0.9 and n < 1) {
+            if (n > 0.9) {
                 try map.set_tile(x, y, Tile.Dirt);
             } else if (n > 0) {
                 try map.set_tile(x, y, Tile.Stone);
@@ -68,7 +73,6 @@ pub fn worms(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
                     try map.set_tile(x, y + i, Tile.Vine);
 
                     const vine_n = gen.genNoise2D(@floatFromInt(x), @floatFromInt(y + i));
-                    std.debug.print("vine n: {}\n", .{vine_n});
                     if (vine_n < -0.15 and i > 1) break;
                 }
             }
@@ -76,7 +80,13 @@ pub fn worms(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
     }
 }
 
-pub fn caves(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
+// the nether
+// - OGEN, OTILE: filled with lava
+// - OMECH, OTILE: the ground inflicts burning instantly unless you have a specific monolith
+// - OGEN, OTILE: there are chests which contain rare stuff, keys are crafted with ores here
+// - OMECH: mobs killed while having the monolith will drop stuff that can be used for gear at that stage
+//
+pub fn nether(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
     const gen = fastnoise.Noise(f32){
         .seed = 1337,
         .noise_type = .simplex,
@@ -163,6 +173,23 @@ pub fn caves(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
             if (world_y >= 0 and world_y < to.y) { // clamp to tile bounds
                 try map.set_tile(world_x, world_y, Tile.Stone);
             }
+        }
+    }
+}
+
+pub fn caves(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
+    const gen = fastnoise.Noise(f32){
+        .seed = 1337,
+        .noise_type = .simplex,
+        .domain_warp_type = .simplex_reduced,
+        .domain_warp_amp = 3,
+        .frequency = 0.05,
+    };
+    for (from.x..to.x) |x| {
+        for (from.y..to.y) |y| {
+            const n = gen.genNoise2D(@floatFromInt(x), @floatFromInt(y));
+            if (n > 0)
+                try map.set_tile(x, y, Tile.Stone);
         }
     }
 }

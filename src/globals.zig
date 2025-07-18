@@ -2,6 +2,7 @@ const rl = @import("raylib");
 
 // TODO: make mutable
 pub const BSIZE = 16;
+pub const DEBUG_LIGHTMAP = false; // to show their noise n light
 pub const ScreenWidth = 1080;
 pub const ScreenHeight = 720;
 pub const gravity = 640.0;

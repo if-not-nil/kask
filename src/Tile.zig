@@ -19,11 +19,12 @@ wall: Tile.WallType = .none,
 
 // reactive as in reactive to the an entity touching it
 // only blocks should have that
-reactive: bool = true,
+reactive: bool = false,
 react: ?*const fn (self: *Tile) void = null,
 draw_fn: ?*const fn (x: i32, y: i32, light: u4) void = null,
 color: ?rl.Color = null,
 light_emit: ?u4 = 0,
+DEBUG_n: ?f32 = 0, // the noise value
 
 pub fn collision_type(self: *const Tile) CollisionType {
     return switch (self.block) {
@@ -108,9 +109,10 @@ const draw_fns = struct {
 
 pub const None = Tile{
     .block = .none,
-    .reactive = false,
     .wall = .none,
     .draw_fn = draw_fns.air,
+    .light_emit = null,
+    .reactive = false,
 };
 
 pub const Dirt = Tile{
@@ -123,15 +125,19 @@ pub const Dirt = Tile{
 
 pub const Stone = Tile{
     .block = .stone,
-    .reactive = false,
     .wall = .none,
     .light_emit = 15,
     .color = .gray,
 };
 
+pub const Lava = Tile{
+    .block = .lava,
+    .wall = .none,
+    .color = .red,
+};
+
 pub const Vine = Tile{
     .block = .vine,
-    .reactive = false,
     .wall = .none,
     .draw_fn = draw_fns.vine,
 };
