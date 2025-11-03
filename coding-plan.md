@@ -1,3 +1,4 @@
 - separate the logic into client and server and put them on two threads
+- separate files for drawing and only have raylib be mentioned there
 - fix the lighting (actually watch a video on that)
 - ticking stuff 

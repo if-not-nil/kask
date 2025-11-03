@@ -95,8 +95,8 @@ pub fn nether(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
         .frequency = 0.05,
     };
 
-    var stonebleeds = std.ArrayList(G.Vec2i).init(map.allocator);
-    defer stonebleeds.deinit();
+    var stonebleeds = try std.ArrayList(G.Vec2i).initCapacity(map.allocator, 1);
+    defer stonebleeds.deinit(map.allocator);
 
     for (from.x..to.x) |x| {
         const xf = @as(f32, @floatFromInt(x));
@@ -133,7 +133,7 @@ pub fn nether(map: *Map, from: G.Vec2u, to: G.Vec2u) !void {
             //     bleed_buf_count += 1;
             // }
             if (clamped_bottom < 9) {
-                try stonebleeds.append(.{
+                try stonebleeds.append(map.allocator, .{
                     .x = @intCast(x),
                     // or 220 - h_mod - clamped_bottom
                     .y = @intCast(220 + h_mod - clamped_bottom),

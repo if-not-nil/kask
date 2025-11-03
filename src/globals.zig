@@ -1,15 +1,36 @@
 const rl = @import("raylib");
 
 // TODO: make mutable
-pub const BSIZE = 16;
+pub const BSIZE = 8;
 pub const DEBUG_LIGHTMAP = false; // to show their noise n light
+pub const DEBUG_last_recalc_square = false;
 pub const ScreenWidth = 1080;
 pub const ScreenHeight = 720;
 pub const gravity = 640.0;
+pub const Rect = struct {
+    x: usize,
+    y: usize,
+    w: usize,
+    h: usize,
+    pub fn multiply(self: *Rect, factor: usize) Rect {
+        return Rect{
+            .x = self.x * factor,
+            .y = self.y * factor,
+            .w = self.w * factor,
+            .h = self.h * factor,
+        };
+    }
+    pub fn ray(self: *Rect) rl.Rectangle {
+        return rl.Rectangle.init(@intCast(self.x), @intCast(self.y), @intCast(self.w), @intCast(self.h));
+    }
+    pub fn draw(self: *Rect, color: rl.Color) void {
+        rl.drawRectangleLines(@intCast(self.x), @intCast(self.y), @intCast(self.w), @intCast(self.h), color);
+    }
+};
 pub const Vec2i = struct {
     x: i32,
     y: i32,
-    const zero = Vec2i{ .x = 0, .y = 0 };
+    pub const zero = Vec2i{ .x = 0, .y = 0 };
 };
 pub const Vec2u = struct {
     x: usize,
@@ -19,7 +40,7 @@ pub const Vec3i = struct {
     x: i32,
     y: i32,
     z: i32,
-    const zero = Vec2i{ .x = 0, .y = 0 };
+    pub const zero = Vec2i{ .x = 0, .y = 0 };
 };
 
 pub fn which_chunk(x: usize, y: usize) struct { x: usize, y: usize } {

@@ -5,33 +5,27 @@ const rl = @import("raylib");
 const Chunk = @import("./Chunk.zig");
 const Tile = @import("./Tile.zig");
 const G = @import("globals.zig");
+const Vec2i = G.Vec2i;
 
 const generators = @import("./generators.zig");
 pub const Map = @This();
 
 allocator: std.mem.Allocator,
 chunks: *[G.CHUNK_NUM][G.CHUNK_NUM]Chunk,
-initial_light_chunks: [G.CHUNK_NUM][G.CHUNK_NUM]bool = @splat(@splat(false)),
-initial_lighting_done: bool = false,
+DEBUG_last_light_recalc: ?G.Rect = null,
+light_recalc_queued: bool = false,
 
 pub fn init(allocator: std.mem.Allocator) !Map {
-    var chunks = try allocator.create([G.CHUNK_NUM][G.CHUNK_NUM]Chunk);
+    var map = Map{
+        .chunks = try allocator.create([G.CHUNK_NUM][G.CHUNK_NUM]Chunk),
+        .allocator = allocator,
+    };
 
     for (0..G.CHUNK_NUM) |x| {
         for (0..G.CHUNK_NUM) |y| {
-            chunks[x][y] = Chunk.init(x, y);
+            map.chunks[x][y] = Chunk.init(&map, x, y);
         }
     }
-
-    // for (0..G.CHUNK_NUM) |x| {
-    //     for (2..G.CHUNK_NUM) |y| {
-    //         chunks[x][y].generate_stone();
-    //     }
-    // }
-    var map = Map{
-        .chunks = chunks,
-        .allocator = allocator,
-    };
 
     try generators.nether(
         &map,
@@ -52,6 +46,11 @@ pub fn init(allocator: std.mem.Allocator) !Map {
 }
 
 pub fn deinit(self: *Map) void {
+    for (0..G.CHUNK_NUM) |x| {
+        for (0..G.CHUNK_NUM) |y| {
+            self.chunks[x][y].deinit();
+        }
+    }
     self.allocator.destroy(self.chunks);
 }
 
@@ -108,15 +107,17 @@ pub fn set_tile(self: *Map, x: anytype, y: anytype, tile: Tile) !void {
         return error.OutOfBoundsBlockBreak;
     }
 
-    self.chunks[G.USIZE(chunk_x)][G.USIZE(chunk_y)]
-        .tiles[G.USIZE(local_x)][G.USIZE(local_y)] = tile;
+    try self.chunks[G.USIZE(chunk_x)][G.USIZE(chunk_y)].set_tile(G.USIZE(local_x), G.USIZE(local_y), tile);
+    // .tiles[G.USIZE(local_x)][G.USIZE(local_y)] = tile;
 }
 
 pub fn set_tile_client(self: *Map, x: anytype, y: anytype, tile: Tile) !void {
     try self.set_tile(x, y, tile);
-    const sx: usize = @intCast(x - 2);
-    const sy: usize = @intCast(y - 2);
-    try self.recalc_light(sx - 16, sy - 16, 33, 33);
+    try self.recalc_light(@intCast(x - 15), @intCast(y - 15), 33, 33);
+    // try self.set_light(@intCast(x), @intCast(y), 0);
+    // const sx: usize = @intCast(x - 2);
+    // const sy: usize = @intCast(y - 2);
+    // try self.recalc_light(sx - 32, sy - 32, 65, 65);
 }
 
 pub fn check_collisions(self: *Map, x: f32, y: f32) Tile.CollisionType {
@@ -140,14 +141,15 @@ pub fn reset_light(self: *Map, x_start: usize, y_start: usize, width: usize, hei
 }
 
 pub fn recalc_light(self: *Map, x_start: usize, y_start: usize, width: usize, height: usize) !void {
-    var queue = std.ArrayList(G.Vec3i).init(self.allocator);
-    defer queue.deinit();
+    try self.reset_light(x_start, y_start, width, height);
+    var queue = try std.ArrayList(G.Vec3i).initCapacity(self.allocator, 1);
+    defer queue.deinit(self.allocator);
     for (x_start..x_start + width) |x| {
         for (y_start..y_start + height) |y| {
             const tile = try self.get_tile(x, y);
             if (tile.light_emit) |emit| {
                 try self.set_light(x, y, emit);
-                try queue.append(.{ .x = @intCast(x), .y = @intCast(y), .z = emit });
+                try queue.append(self.allocator, .{ .x = @intCast(x), .y = @intCast(y), .z = emit });
             }
         }
     }
@@ -169,12 +171,16 @@ pub fn recalc_light(self: *Map, x_start: usize, y_start: usize, width: usize, he
                 next_level = @divTrunc(next_level, 2);
             }
             try self.set_light(nx_u, ny_u, @intCast(next_level));
-            try queue.append(.{
+            try queue.append(self.allocator, .{
                 .x = nx,
                 .y = ny,
                 .z = next_level,
             });
         }
+    }
+    if (comptime G.DEBUG_last_recalc_square) {
+        var r = G.Rect{ .x = x_start, .y = y_start, .w = width, .h = height };
+        self.DEBUG_last_light_recalc = r.multiply(G.BSIZE);
     }
 }
 
@@ -188,33 +194,15 @@ pub fn draw(self: *Map, pos: rl.Vector2) !void {
     const x_start = x_u / G.BSIZE;
     const y_start = y_u / G.BSIZE;
 
-    const c = G.which_chunk(x_start, y_start);
-    // TODO: make it not like this
-    if (!self.initial_lighting_done) {
-        if (!self.initial_light_chunks[c.x][c.y]) {
-            try self.recalc_light(c.x * G.CHUNK_SIZE, c.y * G.CHUNK_SIZE, 256, 256);
-            std.debug.print("did chunk {}\n", .{c});
-
-            // this is horrible!
-            self.initial_light_chunks[@intCast(c.x)][@intCast(c.y)] = true;
-
-            var all_done = true;
-
-            for (self.initial_light_chunks) |chunk_row| {
-                for (chunk_row) |is_done| {
-                    if (!is_done) {
-                        all_done = false;
-                        break;
-                    }
-                }
-                if (!all_done) break;
-            }
-
-            if (all_done) {
-                self.initial_lighting_done = true;
-                std.debug.print("all chunks lit up!\n", .{});
-            }
-        }
+    if (self.light_recalc_queued) {
+        try self.recalc_light(
+            @max(0, x_start - 15),
+            @max(0, y_start - 15),
+            @min(G.WORLD_SIZE, draw_w + 30),
+            @min(G.WORLD_SIZE, draw_h + 30),
+        );
+        std.debug.print("did light\n", .{});
+        self.light_recalc_queued = false;
     }
 
     for (x_start..@min(x_start + draw_w, G.CHUNK_SIZE * G.CHUNK_NUM)) |x| {
@@ -223,6 +211,10 @@ pub fn draw(self: *Map, pos: rl.Vector2) !void {
             tile.t.draw(x, y, tile.l);
         }
     }
-    if (comptime G.DEBUG_LIGHTMAP)
+    if (comptime G.DEBUG_LIGHTMAP) {
+        const c = G.which_chunk(x_start, y_start);
         self.chunks[c.x][c.y].DEBUG_lightmap();
+    }
+    if (G.DEBUG_last_recalc_square)
+        self.DEBUG_last_light_recalc.?.draw(rl.colorAlpha(.red, 0.5));
 }

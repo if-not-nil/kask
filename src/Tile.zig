@@ -6,6 +6,7 @@ pub const Tile = @This();
 
 pub const BlockType = enum {
     none,
+    water,
     stone,
     dirt,
     lava,
@@ -28,8 +29,7 @@ DEBUG_n: ?f32 = 0, // the noise value
 
 pub fn collision_type(self: *const Tile) CollisionType {
     return switch (self.block) {
-        .none => .none,
-        .vine => .none,
+        .none, .vine, .water => .none,
         else => .solid,
     };
 }
@@ -140,4 +140,10 @@ pub const Vine = Tile{
     .block = .vine,
     .wall = .none,
     .draw_fn = draw_fns.vine,
+};
+
+pub const Water = Tile{
+    .block = .water,
+    .wall = .none,
+    .color = .blue,
 };

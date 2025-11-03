@@ -1,18 +1,20 @@
-const rl = @import("raylib");
-
 const std = @import("std");
-const Map = @import("./Map.zig");
-const G = @import("globals.zig");
-const Collider = @import("./Collider.zig");
-const Vec2 = rl.Vector2;
-const Vec2i = struct { x: i32, y: i32 };
-const Tile = @import("./Tile.zig");
 
+const rl = @import("raylib");
+const Vec2 = rl.Vector2;
+
+const Collider = @import("./Collider.zig");
+const Map = @import("./Map.zig");
+const Tile = @import("./Tile.zig");
+const G = @import("globals.zig");
+
+const Vec2i = struct { x: i32, y: i32 };
 const Cursor = struct {
     pos: Vec2 = .{ .x = 0, .y = 0 },
     const signals = enum {
         // TODO: dont break them instantly
         BreakTile,
+        DebugWater,
     };
     const input_res = struct {
         t: signals,
@@ -28,10 +30,13 @@ const Cursor = struct {
         };
         if (rl.isMouseButtonPressed(.left))
             return .{ .t = signals.BreakTile, .pos = pos };
+        if (rl.isKeyPressed(.k))
+            return .{ .t = signals.DebugWater, .pos = pos };
         return null;
     }
     fn draw(self: *Cursor, cam: *rl.Camera2D) void {
-        self.pos = rl.getScreenToWorld2D(rl.getMousePosition(), cam.*);
+        self.pos = rl.getWorldToScreen2D(rl.getMousePosition(), cam.*);
+        std.debug.print("{}{}\n", .{self.pos, rl.getScreenToWorld2D(rl.getMousePosition(), cam.*)});
 
         rl.drawRectangle(
             G.I32(self.pos.x / G.BSIZE) * G.BSIZE,
@@ -53,6 +58,7 @@ camera: rl.Camera2D,
 draw_pos: Vec2 = Vec2{ .x = 0, .y = 0 },
 collider: Collider,
 cursor: Cursor,
+prev_recalc_pos: G.Vec2i = G.Vec2i.zero,
 
 map_ptr: *Map,
 speed: f32 = 0.05,
@@ -120,18 +126,25 @@ pub fn update(self: *Player) !void {
                 .BreakTile => {
                     try self.map_ptr.set_tile_client(res.pos.x, res.pos.y, Tile.None);
                 },
+                .DebugWater => {
+                    try self.map_ptr.set_tile_client(res.pos.x, res.pos.y, Tile.Water);
+                },
             }
         }
     }
 
     if (comptime G.NOCLIP) {
-        self.camera.target.x += G.input_vector_1d(.a, .d) * 50;
-        self.camera.target.y += G.input_vector_1d(.w, .s) * 50;
+        self.x += G.input_vector_1d(.a, .d) * 50;
+        self.y += G.input_vector_1d(.w, .s) * 50;
         if (rl.isKeyDown(.minus))
             self.camera.zoom -= 0.01;
 
         if (rl.isKeyDown(.equal))
             self.camera.zoom += 0.01;
+        self.camera.target = Vec2.init(
+            std.math.clamp(self.x, G.CameraBounds.left, G.CameraBounds.right),
+            std.math.clamp(self.y, G.CameraBounds.top, G.CameraBounds.bottom),
+        );
     } else {
         const delta_time = rl.getFrameTime();
         self.apply_horizontal_movement(delta_time);
@@ -142,7 +155,13 @@ pub fn update(self: *Player) !void {
             std.math.clamp(self.y, G.CameraBounds.top, G.CameraBounds.bottom),
         );
     }
-
+    const tile_x = @as(i32, @intFromFloat(self.x / G.BSIZE));
+    const tile_y = @as(i32, @intFromFloat(self.y / G.BSIZE));
+    if (tile_x != self.prev_recalc_pos.x or tile_y != self.prev_recalc_pos.y) {
+        self.prev_recalc_pos.x = tile_x;
+        self.prev_recalc_pos.y = tile_y;
+        self.map_ptr.light_recalc_queued = true;
+    }
     self.draw_pos.x = @max(0, self.camera.target.x - self.camera.offset.x);
     self.draw_pos.y = @max(0, self.camera.target.y - self.camera.offset.y);
     self.collider.x = self.x;
@@ -178,5 +197,6 @@ pub fn init(map_ptr: *Map) Player {
 
 pub fn draw(self: *Player) void {
     rl.drawRectangleRec(self.collider.rect, .yellow);
+    rl.drawRectangle(@intFromFloat(self.x), @intFromFloat(self.y), 32, 48, .yellow);
     self.cursor.draw(&self.camera);
 }
